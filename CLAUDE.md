@@ -145,6 +145,17 @@ All model work on this repo runs on the local **qwen3.8:27b** through the `RunLo
 about this code goes to a cloud API. Claude stays the agent — it reads the files, applies the edits,
 runs the `.\test.ps1` gate and drives git; the local model writes the code and does the review.
 
+Use the **`ollama-local` MCP connector**, registered for this repo in `.mcp.json` and hard-pinned
+to `qwen3.8:27b`:
+
+- `local_generate` — the actual work. `session: "UpdateEverything"` keeps one thread across a task.
+- `local_load` — pin the model in VRAM at the start of a session; a cold load costs 10-30s.
+- `local_unload` — hand the card back when the session is done.
+- `local_status` — GPU-versus-spill split and active context, when throughput looks wrong.
+
+The connector is stdlib-only and local; nothing third-party sits in the prompt path. If MCP is
+unavailable, the RunLocal skill reaches the same model and shares the same session store:
+
 ```bash
 python C:/Users/brian/.claude/skills/RunLocal/runlocal.py --prompt-file <file> --session UpdateEverything
 ```

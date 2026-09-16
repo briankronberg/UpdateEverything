@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ollama-local": {
+      "command": "C:/Users/brian/AppData/Local/Python/pythoncore-3.14-64/python.exe",
+      "args": ["C:/Users/brian/.claude/mcp-servers/ollama-local/server.py"]
+    }
+  }
+}
