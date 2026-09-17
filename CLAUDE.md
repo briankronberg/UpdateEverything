@@ -138,3 +138,33 @@ The five default labels, each string equal to its role name (`needs-triage`, `ne
 ### Domain docs
 
 Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Local model
+
+All model work on this repo runs on the local **qwen3.8:27b** through the `RunLocal` skill. Nothing
+about this code goes to a cloud API. Claude stays the agent — it reads the files, applies the edits,
+runs the `.\test.ps1` gate and drives git; the local model writes the code and does the review.
+
+Use the **`ollama-local` MCP connector**, registered for this repo in `.mcp.json` and hard-pinned
+to `qwen3.8:27b`:
+
+- `local_generate` — the actual work. `session: "UpdateEverything"` keeps one thread across a task.
+- `local_load` — pin the model in VRAM at the start of a session; a cold load costs 10-30s.
+- `local_unload` — hand the card back when the session is done.
+- `local_status` — GPU-versus-spill split and active context, when throughput looks wrong.
+
+The connector is stdlib-only and local; nothing third-party sits in the prompt path. If MCP is
+unavailable, the RunLocal skill reaches the same model and shares the same session store:
+
+```bash
+python C:/Users/brian/.claude/skills/RunLocal/runlocal.py --prompt-file <file> --session UpdateEverything
+```
+
+Carry the actual source in the prompt rather than describing it. `--think` for design and debugging,
+off for mechanical rewrites. `--session UpdateEverything` keeps one thread across a task. The default
+`--num-ctx` of 172032 is the GPU-resident ceiling; anything past it is truncated **silently**, so split
+large jobs instead of overflowing. Set the Bash timeout to 600000 — a cold load costs 10–30s.
+
+Report the local model's output as its own, and say so plainly when a run fails. Never quietly answer
+in its place: a silent swap sends the work to a cloud model, which is the one thing this setup exists
+to prevent.
