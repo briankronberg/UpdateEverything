@@ -105,6 +105,55 @@ and is why the commands here use the long form. Without it a machine set to
 PowerShell and PowerShell 7 hold separate policies, so one may refuse what the
 other runs. Check with `Get-ExecutionPolicy -List`.
 
+### Removing old versions
+
+Installing does not remove what was there before. PowerShell keeps versions
+side by side, so each install adds a folder and the older ones stay, in both
+editions. Nothing breaks, but the old copies are still importable, and a
+scheduled task registered by an older version keeps running that older version
+for as long as it exists.
+
+`Remove-UpdateEverythingVersion` clears them out. It is deliberately a separate
+command rather than a side effect of installing, because deleting something is
+not what you asked for when you asked to install.
+
+```powershell
+Remove-UpdateEverythingVersion -WhatIf
+```
+
+Start there. It reports exactly what it would do and touches nothing.
+
+```powershell
+Remove-UpdateEverythingVersion
+```
+
+Removes every version except the newest.
+
+| Parameter | Does |
+|---|---|
+| `-Version` | Remove only these versions, rather than everything but the newest |
+| `-Keep` | Protect these versions, on top of what is protected automatically |
+| `-RepairTask` | Re-point a scheduled task at the surviving version instead of refusing to remove the version it pins |
+| `-Force` | Skip the confirmation prompt |
+
+It refuses rather than guesses. It will not remove the version it is running
+from, the newest version, anything named in `-Keep`, or a version a scheduled
+task still points at. That last one matters: the task stores an absolute path to
+a specific version's manifest, so deleting that version turns a task that runs
+stale code into a task that cannot start at all. Use `-RepairTask` to move the
+task to the surviving version and remove the old one in the same pass.
+
+It also clears orphans, meaning version-shaped folders left behind with no
+manifest in them. An orphan is only removed when it is genuinely empty. If
+something is inside it that cannot be identified, it is reported for you to look
+at rather than deleted.
+
+The returned object lists `Removed`, `Orphaned`, `Kept`, `Refused` and
+`TaskRepaired`, and every refusal carries its reason.
+
+Removing a version installed for all users needs an elevated session, the same
+as installing one did.
+
 ## Commands
 
 | Command | Does |
@@ -116,6 +165,8 @@ other runs. Check with `Get-ExecutionPolicy -List`.
 | `Unregister-UpdateEverythingTask` | Removes the task |
 | `Test-PendingReboot` | Reports whether Windows is waiting on a restart, and why |
 | `Convert-PowerShell7ToMsi` | Launches the shipped Store-to-MSI migration script under Windows PowerShell |
+| `Remove-UpdateEverythingVersion` | Removes older installed versions of this module |
+| `Get-UpdateEverythingIssue` | Reports the failures and warnings from the last run, without rerunning it |
 
 `Update-All` is an alias for `Update-Everything`.
 
@@ -281,6 +332,8 @@ thing that crosses a process boundary.
 | `-StepTimeoutMinutes` | `0` | Stop a step's child processes after this long and fail the step alone, so the run still reaches its summary. `0` means no per-step limit. |
 | `-UpdateSelf` | off | Update this module through `Update-Module` and run nothing else. `-Tag`/`-ExcludeTag` are ignored; no UAC prompt is raised, and an all-users copy is reported as needing an elevated session. Takes effect on the **next** run: the module is already loaded, so the files change and the running code does not. |
 | `-UpdateSelfSource` | `Gallery` | Where `-UpdateSelf` gets it from. `Gallery` is the newest published release; `Main` is the development head, fetched from GitHub. |
+| `-IssuesFromLastRun` | off | Report the failures and warnings from the last run and update nothing. Returns issue objects, not a run result. |
+| `-IncludeSkipped` | off | Include skipped steps in that report. Skips are decisions, not faults, so they are left out by default. |
 
 ## Selecting steps
 
@@ -579,6 +632,43 @@ window, ends this way. See C:\Users\you\UpdateLogs\Update-Everything-20260902-03
 
 Registering a task prints the limit alongside the schedule, and
 `-ExecutionTimeLimitHours` changes it.
+
+### What went wrong last time
+
+A scheduled run finishes in a session nobody was watching, and the object it
+returned goes with that session. Only the logs survive, and finding the failures
+in them means knowing which run was the last one, which of the thirty-odd step
+logs belong to it, and which lines are this module's verdict rather than a tool's
+own chatter.
+
+```powershell
+Get-UpdateEverythingIssue
+```
+
+```
+Status  Step                  Detail
+------  ----                  ------
+Warning winget (all sources)  1 error record(s). The messages are in the step log
+```
+
+`Update-Everything -IssuesFromLastRun` does the same thing and updates nothing.
+
+It reports only what the module itself concluded. `Invoke-Step` already decided
+at run time which errors were real and which were the ordinary stderr chatter
+that npm, winget and wsl produce on a good day, and wrote that verdict down.
+Re-deciding it here by searching output for the word "error" would disagree with
+the run's own exit code, and would match any tool that happens to use the word.
+
+Skipped steps are left out unless you ask for them with `-IncludeSkipped`. A
+declined install, a step filtered out by `-Tag`, a step needing rights the run
+did not have: all decisions, none of them faults, and none of them counted in the
+exit code.
+
+Each run now also writes `Update-Everything-<stamp>.summary.json` beside its
+transcript, holding each step's status and the exact text of any errors. Reports
+drawn from it carry the real messages; reports drawn from older runs fall back to
+the logs and say so in a `Source` property, because PowerShell renders an error
+differently on 5.1 than on 7 and parsing that back is not worth trusting.
 
 ### An error appears twice in the transcript
 

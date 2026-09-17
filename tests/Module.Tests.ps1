@@ -37,6 +37,8 @@ BeforeDiscovery {
         @{ Name = 'StepTimeoutMinutes';        TypeName = 'int';      Type = [int];      Default = '0' }
         @{ Name = 'UpdateSelf';                TypeName = 'switch';   Type = [switch];   Default = $null }
         @{ Name = 'UpdateSelfSource';          TypeName = 'string';   Type = [string];   Default = "'Gallery'" }
+        @{ Name = 'IssuesFromLastRun';         TypeName = 'switch';   Type = [switch];   Default = $null }
+        @{ Name = 'IncludeSkipped';            TypeName = 'switch';   Type = [switch];   Default = $null }
     )
 
     # Each of these either reboots the machine, moves pinned toolchains, reaches
@@ -57,6 +59,8 @@ BeforeDiscovery {
         'Get-UpdateEverythingTask'
         'Test-PendingReboot'
         'Convert-PowerShell7ToMsi'
+        'Remove-UpdateEverythingVersion'
+        'Get-UpdateEverythingIssue'
     )
 
     $HasAnalyzer = [bool] (Get-Module PSScriptAnalyzer -ListAvailable)
@@ -492,9 +496,22 @@ Describe 'Update-Everything' -Tag 'Static' {
             $declared.DefaultValue | Should-BeNull -Because 'switches must stay opt-in'
         }
 
-        It 'declares no parameters beyond the documented contract' {
+        # Counted from $ExpectedParameters rather than written out again. A bare
+        # number here has to be edited by hand every time a parameter is added,
+        # and the edit is indistinguishable from the one that suppresses this
+        # test. Derived, the only way to make it pass is to document the
+        # parameter in the table above, which is the point.
+        # -ForEach carries the count from discovery into the test body. Written as
+        # a bare $ExpectedParameters.Count inside It it would be $null, because
+        # BeforeDiscovery variables do not survive into the run phase, and
+        # Should-BeCollection -Count $null passes for any collection. That is a
+        # test that cannot fail, which is worse than the hard-coded number it
+        # replaced.
+        It 'declares no parameters beyond the documented contract' -ForEach @(
+            @{ Expected = $ExpectedParameters.Count }
+        ) {
             $script:DeclaredParameters.Name.VariablePath.UserPath |
-                Should-BeCollection -Count 20 -Because 'a new parameter needs docs and a test'
+                Should-BeCollection -Count $Expected -Because 'a new parameter needs docs and a test'
         }
 
         It 'bounds -LogRetentionDays with ValidateRange' {
