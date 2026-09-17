@@ -166,6 +166,7 @@ as installing one did.
 | `Test-PendingReboot` | Reports whether Windows is waiting on a restart, and why |
 | `Convert-PowerShell7ToMsi` | Launches the shipped Store-to-MSI migration script under Windows PowerShell |
 | `Remove-UpdateEverythingVersion` | Removes older installed versions of this module |
+| `Get-UpdateEverythingIssue` | Reports the failures and warnings from the last run, without rerunning it |
 
 `Update-All` is an alias for `Update-Everything`.
 
@@ -331,6 +332,8 @@ thing that crosses a process boundary.
 | `-StepTimeoutMinutes` | `0` | Stop a step's child processes after this long and fail the step alone, so the run still reaches its summary. `0` means no per-step limit. |
 | `-UpdateSelf` | off | Update this module through `Update-Module` and run nothing else. `-Tag`/`-ExcludeTag` are ignored; no UAC prompt is raised, and an all-users copy is reported as needing an elevated session. Takes effect on the **next** run: the module is already loaded, so the files change and the running code does not. |
 | `-UpdateSelfSource` | `Gallery` | Where `-UpdateSelf` gets it from. `Gallery` is the newest published release; `Main` is the development head, fetched from GitHub. |
+| `-IssuesFromLastRun` | off | Report the failures and warnings from the last run and update nothing. Returns issue objects, not a run result. |
+| `-IncludeSkipped` | off | Include skipped steps in that report. Skips are decisions, not faults, so they are left out by default. |
 
 ## Selecting steps
 
@@ -629,6 +632,43 @@ window, ends this way. See C:\Users\you\UpdateLogs\Update-Everything-20260902-03
 
 Registering a task prints the limit alongside the schedule, and
 `-ExecutionTimeLimitHours` changes it.
+
+### What went wrong last time
+
+A scheduled run finishes in a session nobody was watching, and the object it
+returned goes with that session. Only the logs survive, and finding the failures
+in them means knowing which run was the last one, which of the thirty-odd step
+logs belong to it, and which lines are this module's verdict rather than a tool's
+own chatter.
+
+```powershell
+Get-UpdateEverythingIssue
+```
+
+```
+Status  Step                  Detail
+------  ----                  ------
+Warning winget (all sources)  1 error record(s). The messages are in the step log
+```
+
+`Update-Everything -IssuesFromLastRun` does the same thing and updates nothing.
+
+It reports only what the module itself concluded. `Invoke-Step` already decided
+at run time which errors were real and which were the ordinary stderr chatter
+that npm, winget and wsl produce on a good day, and wrote that verdict down.
+Re-deciding it here by searching output for the word "error" would disagree with
+the run's own exit code, and would match any tool that happens to use the word.
+
+Skipped steps are left out unless you ask for them with `-IncludeSkipped`. A
+declined install, a step filtered out by `-Tag`, a step needing rights the run
+did not have: all decisions, none of them faults, and none of them counted in the
+exit code.
+
+Each run now also writes `Update-Everything-<stamp>.summary.json` beside its
+transcript, holding each step's status and the exact text of any errors. Reports
+drawn from it carry the real messages; reports drawn from older runs fall back to
+the logs and say so in a `Source` property, because PowerShell renders an error
+differently on 5.1 than on 7 and parsing that back is not worth trusting.
 
 ### An error appears twice in the transcript
 

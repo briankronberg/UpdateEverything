@@ -24,6 +24,7 @@
         'Test-PendingReboot'
         'Convert-PowerShell7ToMsi'
         'Remove-UpdateEverythingVersion'
+        'Get-UpdateEverythingIssue'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

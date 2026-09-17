@@ -216,6 +216,18 @@
         hangs inside a cmdlet in this process, such as a Windows Update scan
         that never returns.
 
+    .PARAMETER IssuesFromLastRun
+        Report the failures and warnings from the most recent run and update
+        nothing. A scheduled run finishes in a session nobody was watching, so
+        its result object is gone; this reads what it left in the log directory.
+        Returns UpdateEverything.Issue objects rather than a run result.
+
+    .PARAMETER IncludeSkipped
+        Include skipped steps in that report. Off by default, because a declined
+        install, a step filtered out by -Tag and a step needing rights this run
+        did not have are all decisions rather than faults, and none of them count
+        towards the exit code. Use this when auditing what a run did not do.
+
     .OUTPUTS
         An object describing the run:
 
@@ -276,8 +288,24 @@
         [int]    $StepTimeoutMinutes     = 0,
         [switch] $UpdateSelf,
         [ValidateSet('Gallery', 'Main')]
-        [string] $UpdateSelfSource = 'Gallery'
+        [string] $UpdateSelfSource = 'Gallery',
+
+        [switch] $IssuesFromLastRun,
+
+        [switch] $IncludeSkipped
     )
+
+    # Report mode, handled before anything else touches the machine. Nothing is
+    # updated, no transcript is opened and no log directory is pruned: this reads
+    # what the last run left behind and returns it.
+    #
+    # The work is Get-UpdateEverythingIssue's, not this function's. A switch that
+    # made a 1700-line update routine return a different shape would have to be
+    # tested by stubbing every step; delegating keeps the reading testable on its
+    # own, and keeps the two return shapes from being produced by one body.
+    if ($IssuesFromLastRun) {
+        return Get-UpdateEverythingIssue -IncludeSkipped:$IncludeSkipped
+    }
 
     # State shared with the private helpers is assigned with $script:. Inside a
     # module a plain assignment is function-scoped, so Invoke-Step would read an
@@ -307,7 +335,7 @@
     if ($LogRetentionDays -gt 0) {
         $cutoff = (Get-Date).AddDays(-$LogRetentionDays)
         Get-ChildItem -LiteralPath $logDir -File -ErrorAction SilentlyContinue |
-            Where-Object { ($_.Name -like '*.log' -or $_.Name -like '*.json.bak') -and $_.LastWriteTime -lt $cutoff } |
+            Where-Object { ($_.Name -like '*.log' -or $_.Name -like '*.json.bak' -or $_.Name -like '*.summary.json') -and $_.LastWriteTime -lt $cutoff } |
             Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
@@ -1755,6 +1783,14 @@
     if ($failedSteps.Count) {
         Write-Host "$($failedSteps.Count) step(s) failed." -ForegroundColor Red
     }
+
+    # The machine-readable record of this run, for Get-UpdateEverythingIssues to
+    # read later. Written here rather than after the transcript closes, so a
+    # failure to write it is itself on the transcript. It returns the path, which
+    # is of no interest to the caller of a run.
+    $null = Save-UpdateRunSummary -LogDirectory $logDir -RunStamp $script:runStamp `
+        -Steps $Results -Elevated $isAdmin `
+        -RebootPending $reboot.IsPending -RebootReason $reboot.Reasons
 
     # After the summary and before the transcript closes, so the hold is on
     # record. -PromptTimeoutSeconds bounds it when given; otherwise ten minutes,

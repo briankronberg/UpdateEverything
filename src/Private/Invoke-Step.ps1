@@ -46,7 +46,7 @@
         $msg = "SKIP  $Name (command '$RequiresCommand' not found)"
         Write-Host $msg -ForegroundColor DarkGray
         Write-StepLog -Path $stepLog -Message $msg
-        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = 0; Log = $stepLog })
+        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = 0; Log = $stepLog; Detail = @("command '$RequiresCommand' not found") })
         return
     }
 
@@ -54,7 +54,7 @@
         $msg = "SKIP  $Name (requires Administrator; this run is not elevated)"
         Write-Host $msg -ForegroundColor DarkGray
         Write-StepLog -Path $stepLog -Message $msg
-        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = 0; Log = $stepLog })
+        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = 0; Log = $stepLog; Detail = @("requires Administrator; this run is not elevated") })
         return
     }
 
@@ -147,13 +147,28 @@
         $secs = [math]::Round($sw.Elapsed.TotalSeconds, 1)
 
         if ($errorRecords.Count -gt 0) {
+            # Detail carries the error messages in memory so a caller has the text
+            # without re-parsing PowerShell's rendered error output, which differs
+            # between editions. The rejected alternative was writing these to the
+            # step log, which would duplicate the text already captured by the
+            # stream merge and violate the single-copy rule for the log.
+            $details = @()
+            foreach ($err in $errorRecords) {
+                $msg = ''
+                if ($err.Exception -and $err.Exception.Message) {
+                    $msg = $err.Exception.Message
+                } else {
+                    $msg = "$err"
+                }
+                $details += , (($msg -replace "[\r\n]+", ' ').Trim())
+            }
             Write-Warning "COMPLETED WITH ERRORS: $Name ($secs s, $($errorRecords.Count) error record(s))"
             Write-StepLog -Path $stepLog -Message "COMPLETED WITH ERRORS | $($errorRecords.Count) error record(s) | Duration: ${secs}s"
-            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Warning'; Seconds = $secs; Log = $stepLog })
+            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Warning'; Seconds = $secs; Log = $stepLog; Detail = $details })
         } else {
             Write-Host "COMPLETED: $Name ($secs s)" -ForegroundColor Green
             Write-StepLog -Path $stepLog -Message "COMPLETED | Duration: ${secs}s"
-            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'OK'; Seconds = $secs; Log = $stepLog })
+            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'OK'; Seconds = $secs; Log = $stepLog; Detail = @() })
         }
     } catch {
         $sw.Stop()
@@ -167,13 +182,13 @@
             $reason = $message -replace '^STEP-SKIPPED:\s*', ''
             Write-Host "SKIP  $Name ($reason)" -ForegroundColor DarkGray
             Write-StepLog -Path $stepLog -Message "SKIPPED | $reason"
-            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = $secs; Log = $stepLog })
+            $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Skipped'; Seconds = $secs; Log = $stepLog; Detail = @(($reason -replace "[\r\n]+", ' ').Trim()) })
             return
         }
 
         Write-Warning ("FAILED: $Name | $_")
         Write-StepLog -Path $stepLog -Message "FAILED | $_"
-        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Failed'; Seconds = $secs; Log = $stepLog })
+        $script:Results.Add([pscustomobject]@{ Step = $Name; Status = 'Failed'; Seconds = $secs; Log = $stepLog; Detail = @((("$_" -replace "[\r\n]+", ' ').Trim())) })
     } finally {
         if ($watchdog) { Stop-StepWatchdog -Watchdog $watchdog }
     }
