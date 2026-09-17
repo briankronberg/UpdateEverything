@@ -132,7 +132,7 @@ Issues are tracked as GitHub issues on briankronberg/UpdateEverything via the `g
 
 ### Triage labels
 
-The triage vocabulary was never adopted. The labels `needs-triage`, `needs-info`, `ready-for-agent`, and `ready-for-human` do not exist in the tracker. Only `wontfix` exists among the proposed set. The file `docs/agents/triage-labels.md` is an unmodified template. A skill expecting these triage labels will fail to find them.
+The triage vocabulary was never adopted. Of the five roles, only `wontfix` has a label of its own, and `needs-info` is covered by `question`. There is nothing for `needs-triage`, `ready-for-agent` or `ready-for-human`, so a skill reaching for one should stop and say so rather than pick a near miss. `docs/agents/triage-labels.md` holds the mapping, and the commands to adopt the workflow if that is ever wanted.
 
 ### Domain docs
 
