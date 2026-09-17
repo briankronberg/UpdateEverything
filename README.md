@@ -55,6 +55,24 @@ a command: with `-UpdateSelf` the run updates this module and does nothing
 else. The default source is `Gallery`, which is right for most people and
 wrong for anyone tracking a patch.
 
+`-Ref` takes a branch or a tag, so a specific release can be installed by name
+rather than whatever `main` happens to be:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -FromGitHub -Ref v1.10.0 -Force
+```
+
+GitHub serves branches and tags from different URLs, so the installer tries the
+branch first and falls back to the tag. If neither exists it says so and names
+both addresses it tried.
+
+`-RemoveOldVersions` clears the older versions after the install succeeds, and
+repoints any scheduled task at the new one. It runs only after the install has
+worked, because cleaning up first would leave a failed install with nothing.
+
+`-WhatIf` downloads and validates, reports where it would install, and writes
+nothing.
+
 ### Why that command is shaped the way it is
 
 It is one line so it survives a copy and paste, but each piece is load-bearing.
