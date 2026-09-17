@@ -1,4 +1,4 @@
-#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.0' }
+﻿#Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '6.0' }
 
 <#
     Static checks on the module itself: the manifest, what it exports, the shape
@@ -767,6 +767,55 @@ Describe 'Repository documentation' -Tag 'Docs' {
         $ghosts = $documented | Where-Object { $_ -notin $real }
 
         $ghosts | Should-BeNull -Because "the function has no such parameter: $($ghosts -join ', ')"
+    }
+}
+
+Describe 'Install.ps1 can fetch a ref of either kind' -Tag 'Static','Docs' {
+
+    BeforeAll {
+        $installPath = Join-Path $script:RepoRoot 'Install.ps1'
+        $installText = Get-Content -LiteralPath $installPath -Raw
+        $installAst  = [System.Management.Automation.Language.Parser]::ParseFile($installPath, [ref] $null, [ref] $null)
+    }
+
+    It 'builds both branch and tag URL forms' {
+        $installText | Should-MatchString 'archive/refs/heads/'
+        $installText | Should-MatchString 'archive/refs/tags/'
+    }
+
+    It 'names both URLs in the failure message' {
+        # ThrowStatementAst, not CommandAst. `throw` is a statement in the
+        # grammar, so searching for a command named 'throw' matches nothing and
+        # leaves this test unable to pass for any input.
+        $throwStatements = $installAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.ThrowStatementAst] }, $true)
+        $found = $false
+        foreach ($stmt in $throwStatements) {
+            $text = $stmt.Extent.Text
+            # Matched without the sigil. The message interpolates them as
+            # ${branchUrl} and ${tagUrl}, with braces, because a bare $branchUrl
+            # followed by a comma would swallow the comma into the name. A
+            # pattern looking for the literal '$branchUrl' therefore never hits.
+            if ($text -like '*branchUrl*' -and $text -like '*tagUrl*') {
+                $found = $true
+            }
+        }
+        $found | Should-BeTrue
+    }
+
+    It 'does not hard-code invented error messages' {
+        $installText | Should-NotMatchString 'Failed to download as tag'
+    }
+
+    It 'creates the scratch directory under -WhatIf' {
+        $installText | Should-MatchString 'New-Item[^\r\n]*-WhatIf:\$false'
+    }
+
+    It 'checks $WhatIfPreference before Import-Module' {
+        $whatIfPos = $installText.IndexOf('$WhatIfPreference')
+        $importPos = $installText.IndexOf('Import-Module')
+        $whatIfPos | Should-BeGreaterThan -1
+        $importPos | Should-BeGreaterThan -1
+        $whatIfPos | Should-BeLessThan $importPos
     }
 }
 

@@ -105,17 +105,30 @@ function Get-ModuleSourceFromGitHub {
         [Parameter(Mandatory)][string] $WorkingDirectory
     )
 
-    $url = "https://github.com/$Repository/archive/refs/heads/$Ref.zip"
+    # GitHub serves branches from archive/refs/heads and tags from archive/refs/tags.
+    # A name like "1.0.0" could be either, so we try both.
+    $branchUrl = "https://github.com/$Repository/archive/refs/heads/$Ref.zip"
+    $tagUrl = "https://github.com/$Repository/archive/refs/tags/$Ref.zip"
     $zip = Join-Path $WorkingDirectory 'repo.zip'
 
     Write-Host "Downloading $Repository ($Ref)..."
+
+    $refType = $null
+    $branchError = $null
+    $tagError = $null
+
     try {
-        # -UseBasicParsing because Windows PowerShell otherwise wants Internet
-        # Explorer's engine, which is absent on a server core install and slow
-        # everywhere else.
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Invoke-WebRequest -Uri $branchUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
+        $refType = 'branch'
     } catch {
-        throw "Could not download $url. A private repository returns 404 to an anonymous request, so check the repository is public and the branch name is right. $($_.Exception.Message)"
+        $branchError = $_.Exception.Message
+        try {
+            Invoke-WebRequest -Uri $tagUrl -OutFile $zip -UseBasicParsing -ErrorAction Stop
+            $refType = 'tag'
+        } catch {
+            $tagError = $_.Exception.Message
+            throw "Could not download $Repository ($Ref). Neither a branch nor a tag with this name was found. Tried: ${branchUrl}, ${tagUrl}. Branch error: ${branchError}. Tag error: ${tagError}. The repository may be private."
+        }
     }
 
     Expand-Archive -Path $zip -DestinationPath $WorkingDirectory -Force
@@ -130,10 +143,15 @@ function Get-ModuleSourceFromGitHub {
         throw "The download from $Repository ($Ref) contains no src\UpdateEverything.psd1."
     }
 
-    $candidates[0]
+    # Return the path and the ref type so the caller can report it
+    [pscustomobject]@{
+        Path = $candidates[0]
+        RefType = $refType
+    }
 }
 
 $workingDirectory = $null
+$refType = 'branch' # default
 
 # $PSScriptRoot is empty when this is piped into Invoke-Expression rather than
 # run from a file, which is how the one-line install works. Join-Path would
@@ -144,8 +162,14 @@ $source = if ($PSScriptRoot) { Join-Path $PSScriptRoot 'src' } else { $null }
 # failing. That is what makes the one-line install work.
 if ($FromGitHub -or -not $source -or -not (Test-Path -LiteralPath (Join-Path $source 'UpdateEverything.psd1'))) {
     $workingDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('UpdateEverything-' + [guid]::NewGuid().ToString('N'))
-    $null = New-Item -ItemType Directory -Path $workingDirectory
-    $source = Get-ModuleSourceFromGitHub -Repository $Repository -Ref $Ref -WorkingDirectory $workingDirectory
+    # -WhatIf:$false because this is a scratch directory, not part of what the
+    # caller is deciding about. Without it, -WhatIf skipped the creation and the
+    # download then failed on a path that did not exist, which the caller saw
+    # reported as a missing branch and tag. Only the install itself is gated.
+    $null = New-Item -ItemType Directory -Path $workingDirectory -WhatIf:$false
+    $downloadResult = Get-ModuleSourceFromGitHub -Repository $Repository -Ref $Ref -WorkingDirectory $workingDirectory
+    $source = $downloadResult.Path
+    $refType = $downloadResult.RefType
 }
 
 try {
@@ -210,13 +234,28 @@ try {
         Move-Item -LiteralPath $staging -Destination $destination
     }
 
+    # Under -WhatIf nothing was copied, so there is nothing to import and nothing
+    # to report on. Without this the run ended in "no valid module file was
+    # found", which reads as a broken install rather than as the dry run it was.
+    # Said here, at the point it stops, rather than left for the caller to infer
+    # from the absence of a summary.
+    if ($WhatIfPreference) {
+        Write-Host ''
+        Write-Host "Would install UpdateEverything $version to:" -ForegroundColor Cyan
+        foreach ($destination in $destinations) { Write-Host "  $destination" }
+        if ($workingDirectory) { Write-Host "  Source   : $Repository ($Ref, $refType)" }
+        Write-Host ''
+        Write-Host 'Checks only. Nothing was installed.' -ForegroundColor Green
+        return
+    }
+
     # Import by path so this reports on the copy just written, not on some other
     # version that happens to sit earlier in the module path.
     $installed = Import-Module (Join-Path $destinations[0] 'UpdateEverything.psd1') -Force -PassThru
 
     Write-Host ''
     Write-Host "Installed UpdateEverything $version" -ForegroundColor Green
-    if ($workingDirectory) { Write-Host "  Source   : $Repository ($Ref)" }
+    if ($workingDirectory) { Write-Host "  Source   : $Repository ($Ref, $refType)" }
     foreach ($destination in $destinations) {
         Write-Host "  Location : $destination"
     }
