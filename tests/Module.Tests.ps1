@@ -57,6 +57,7 @@ BeforeDiscovery {
         'Get-UpdateEverythingTask'
         'Test-PendingReboot'
         'Convert-PowerShell7ToMsi'
+        'Remove-UpdateEverythingVersion'
     )
 
     $HasAnalyzer = [bool] (Get-Module PSScriptAnalyzer -ListAvailable)

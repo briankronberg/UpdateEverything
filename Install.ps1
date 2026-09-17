@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 
 <#
 .SYNOPSIS
@@ -54,6 +54,10 @@
 .PARAMETER PassThru
     Return the installed module rather than only printing a summary.
 
+.PARAMETER RemoveOldVersions
+    After a successful install, remove older versions of the module. It keeps
+    the version just installed and repairs any scheduled task to point at it.
+
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1 -FromGitHub
 
@@ -62,6 +66,8 @@
 
 .NOTES
     Uninstall by deleting the folder this reports.
+    -RemoveOldVersions only removes older versions; uninstalling entirely means
+    deleting all the folders the summary reports.
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -81,7 +87,9 @@ param(
 
     [switch] $Force,
 
-    [switch] $PassThru
+    [switch] $PassThru,
+
+    [switch] $RemoveOldVersions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -227,6 +235,26 @@ try {
     Write-Host ''
     Write-Host '  A cautious first run:'
     Write-Host '    Update-Everything -IncludeWindowsUpdate $false -IncludePowerShell7 $false -SetPwshTerminalDefault $false'
+
+    if ($RemoveOldVersions) {
+        Write-Host ''
+        Write-Host "Removing older versions..."
+
+        # The command only exists in the version just imported, so it is reached
+        # through that module instance.
+        $removeCmd = Get-Command Remove-UpdateEverythingVersion -Module UpdateEverything -ErrorAction SilentlyContinue
+        if ($removeCmd) {
+            try {
+                # -Force skips the prompt because the caller already opted in.
+                # A cleanup failure must not fail the install, which succeeded.
+                $null = Remove-UpdateEverythingVersion -Keep $version -RepairTask -Force
+            } catch {
+                Write-Warning "Failed to remove older versions: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Warning "Remove-UpdateEverythingVersion command not available; skipping cleanup."
+        }
+    }
 
     if ($PassThru) { $installed }
 } finally {

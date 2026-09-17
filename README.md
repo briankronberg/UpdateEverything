@@ -105,6 +105,55 @@ and is why the commands here use the long form. Without it a machine set to
 PowerShell and PowerShell 7 hold separate policies, so one may refuse what the
 other runs. Check with `Get-ExecutionPolicy -List`.
 
+### Removing old versions
+
+Installing does not remove what was there before. PowerShell keeps versions
+side by side, so each install adds a folder and the older ones stay, in both
+editions. Nothing breaks, but the old copies are still importable, and a
+scheduled task registered by an older version keeps running that older version
+for as long as it exists.
+
+`Remove-UpdateEverythingVersion` clears them out. It is deliberately a separate
+command rather than a side effect of installing, because deleting something is
+not what you asked for when you asked to install.
+
+```powershell
+Remove-UpdateEverythingVersion -WhatIf
+```
+
+Start there. It reports exactly what it would do and touches nothing.
+
+```powershell
+Remove-UpdateEverythingVersion
+```
+
+Removes every version except the newest.
+
+| Parameter | Does |
+|---|---|
+| `-Version` | Remove only these versions, rather than everything but the newest |
+| `-Keep` | Protect these versions, on top of what is protected automatically |
+| `-RepairTask` | Re-point a scheduled task at the surviving version instead of refusing to remove the version it pins |
+| `-Force` | Skip the confirmation prompt |
+
+It refuses rather than guesses. It will not remove the version it is running
+from, the newest version, anything named in `-Keep`, or a version a scheduled
+task still points at. That last one matters: the task stores an absolute path to
+a specific version's manifest, so deleting that version turns a task that runs
+stale code into a task that cannot start at all. Use `-RepairTask` to move the
+task to the surviving version and remove the old one in the same pass.
+
+It also clears orphans, meaning version-shaped folders left behind with no
+manifest in them. An orphan is only removed when it is genuinely empty. If
+something is inside it that cannot be identified, it is reported for you to look
+at rather than deleted.
+
+The returned object lists `Removed`, `Orphaned`, `Kept`, `Refused` and
+`TaskRepaired`, and every refusal carries its reason.
+
+Removing a version installed for all users needs an elevated session, the same
+as installing one did.
+
 ## Commands
 
 | Command | Does |
@@ -116,6 +165,7 @@ other runs. Check with `Get-ExecutionPolicy -List`.
 | `Unregister-UpdateEverythingTask` | Removes the task |
 | `Test-PendingReboot` | Reports whether Windows is waiting on a restart, and why |
 | `Convert-PowerShell7ToMsi` | Launches the shipped Store-to-MSI migration script under Windows PowerShell |
+| `Remove-UpdateEverythingVersion` | Removes older installed versions of this module |
 
 `Update-All` is an alias for `Update-Everything`.
 
