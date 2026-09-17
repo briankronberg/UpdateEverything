@@ -1,4 +1,4 @@
-# Working on UpdateEverything
+﻿# Working on UpdateEverything
 
 **Read [CONTRIBUTING.md](CONTRIBUTING.md) before writing code.** It holds the
 house style, the rules a change has to satisfy, the three places this repo
@@ -116,14 +116,13 @@ worth knowing before touching anything release-shaped:
 
 ## Tracking
 
-Work lives in [issues](https://github.com/briankronberg/UpdateEverything/issues).
-Feature requests and bugs both, separated by label rather than location. The
-[1.1.0 milestone](https://github.com/briankronberg/UpdateEverything/milestone/1)
-holds what is committed to the next version; anything without a milestone is
-backlog. Issue #25 carries the roadmap and its dependency order.
+Work lives in [issues](https://github.com/briankronberg/UpdateEverything/issues), separated by labels rather than location. Milestones are not in use. The open 1.1.0 and 1.2.0 milestones are leftovers from early planning, not active release plans. All versions from 1.3 to 1.9 shipped without milestones. Issue #25 was the 1.1.0 roadmap and is now closed. There is no current roadmap issue.
 
-Close issues from the pull request body with `Closes #N`, so the record maintains
-itself.
+Useful labels include `bug`, `enhancement`, `documentation`, `test`, `blocked`, and `wontfix`.
+
+Close issues from the pull request body with `Closes #N`.
+
+Warning: this section has gone stale before. Treat any version number or issue number written here as a claim to verify, not a fact to trust.
 
 ## Agent skills
 
@@ -133,11 +132,11 @@ Issues are tracked as GitHub issues on briankronberg/UpdateEverything via the `g
 
 ### Triage labels
 
-The five default labels, each string equal to its role name (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+The triage vocabulary was never adopted. The labels `needs-triage`, `needs-info`, `ready-for-agent`, and `ready-for-human` do not exist in the tracker. Only `wontfix` exists among the proposed set. The file `docs/agents/triage-labels.md` is an unmodified template. A skill expecting these triage labels will fail to find them.
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Neither `CONTEXT.md` nor `docs/adr/` exists. This project holds its reasoning in `CONTRIBUTING.md` for rules, this file for setup, `README.md` for purpose, and commit messages as a record of decisions. If an ADR directory is needed, create it deliberately rather than assuming it is present.
 
 ### Local model
 
