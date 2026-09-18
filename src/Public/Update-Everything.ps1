@@ -1181,7 +1181,18 @@
                 Write-Output 'uv declined to self-update because something else manages it.'
                 $global:LASTEXITCODE = 0
             } else {
-                Write-Error "uv self update failed with exit code $LASTEXITCODE. uv's own message is in this step's log."
+                # A locked binary is the failure this hits most often here: uv
+                # replaces uv.exe and uvx.exe together, and anything launched
+                # through uvx holds the latter open for as long as it runs.
+                # Naming the holders turns a weekly exit code 2 into something
+                # the reader can act on. It stays an error either way; a lock is
+                # a real failure to update, not a reason to excuse one.
+                $lockNote = Get-FileLockMessage -Output ($output | Out-String)
+                if ($lockNote) {
+                    Write-Error "uv self update failed with exit code ${LASTEXITCODE}. $lockNote"
+                } else {
+                    Write-Error "uv self update failed with exit code $LASTEXITCODE. uv's own message is in this step's log."
+                }
                 $global:LASTEXITCODE = 0
             }
         }
