@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'UpdateEverything.psm1'
-    ModuleVersion     = '1.10.0'
+    ModuleVersion     = '1.10.1'
     GUID              = 'e4e1f3eb-5967-4311-94af-c650fe192e95'
     Author            = 'Brian Kronberg'
     Copyright         = '(c) 2026 Brian Kronberg. Released under the MIT License.'
@@ -35,54 +35,52 @@
             Tags         = @('Windows', 'Update', 'Maintenance', 'winget', 'WindowsUpdate', 'Chocolatey', 'Scoop', 'ScheduledTask', 'PSEdition_Desktop', 'PSEdition_Core')
             LicenseUri   = 'https://github.com/briankronberg/UpdateEverything/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/briankronberg/UpdateEverything'
-            ReleaseNotes = '# 1.10.0
+            ReleaseNotes = '# 1.10.1
 
-## Removing old versions
+## Installing tagged releases
 
-Installing never removed older versions, so they accumulated in both the
-PowerShell and WindowsPowerShell module folders. This is not only untidy.
-A scheduled task stores an absolute path to one specific version of the
-manifest. The old copy therefore stays live and keeps running. On the
-machine this was developed on, a weekly task had been running 1.0.0 for
-as long as 1.9.0 had been installed, reporting success every week.
+Install.ps1 built one download URL, archive/refs/heads/<ref>.zip, which
+serves branches. GitHub serves tags from archive/refs/tags/. Measured
+against the live repository, heads/main returned 200, heads/v1.10.0
+returned 404, and tags/v1.10.0 returned 200. The -Ref parameter promised a
+branch or tag since it was written, but only ever delivered a branch. Every
+tagged release was uninstallable.
 
-Remove-UpdateEverythingVersion is a separate command, not a side effect
-of installing. Install.ps1 calls it only when given -RemoveOldVersions,
-and only after the install succeeds. It refuses to guess. It never removes
-the running version, the newest version, anything named in -Keep, or a
-version a scheduled task points at unless -RepairTask moves the task to
-the surviving version first.
+It now tries the branch path first and the tag path second. Asking GitHub
+is better than guessing from the shape of the name, because a repository
+can legitimately have a branch named like a version. The summary now
+reports which kind was found, for example "main, branch" or "v1.10.0, tag".
 
-Version folders that hold no manifest are treated as orphans and removed
-only when genuinely empty. One that contains anything unidentifiable is
-reported for a human to look at. Deletions are re-checked afterwards,
-because OneDrive can restore a folder that Remove-Item has just reported
-as gone.
+## Dry run fixes
 
-## Reporting last run issues
+Two further bugs were found while proving the first fix. Both involved
+-WhatIf reaching work that is not what the caller is deciding about. The
+temporary download folder was created with New-Item, which honours -WhatIf.
+Under -WhatIf the folder never existed, the download failed on a missing
+path, and the fallback reported that as neither a branch nor a tag being
+found. The folder is scaffolding rather than the operation, so it is now
+created regardless.
 
-A scheduled run finishes in a session nobody was watching, so the result
-object it returned is gone. Only the logs survive. Reading them by hand
-means knowing which stamp was the last run and which of thirty-odd step
-logs belong to it.
+With that cleared, -WhatIf reached Import-Module and failed with "no valid
+module file was found" because nothing had been copied. Install.ps1 -WhatIf
+had therefore never finished without an error. It now reports where it
+would install and stops.
 
-Get-UpdateEverythingIssue reports the failures and warnings from the most
-recent run and updates nothing. Update-Everything -IssuesFromLastRun does
-the same thing by delegating to it. Each run now writes
-Update-Everything-<stamp>.summary.json beside its transcript, holding the
-status of every step and the exact text of any errors.
+## Failure message
 
-It does not re-decide what counted as a failure. Invoke-Step already made
-that judgement during the run, discounting the ordinary stderr chatter
-that npm, winget and wsl produce. Only lines carrying the timestamp
-written by this module are read, because tools print the words FAILED and
-ERROR in their own output all the time.
+The failure message was also rewritten. It hard-coded the string "Failed to
+download as tag" instead of the real exception, and captured the branch
+error inside the inner catch, so it reported the tag failure under the
+branch label and invented the other half. It now carries both real errors,
+names both addresses tried, and mentions a private repository last rather
+than first, where it had been sending readers to check the two things that
+were not wrong.
 
-Skipped steps are left out unless -IncludeSkipped is given. A declined
-install or a step filtered out by -Tag is a decision, not a fault. Runs
-made before this version have no summary file, so reports about them fall
-back to the logs and carry a count and a path rather than the error text.
-A Source property on each issue says which of the two it came from.
+## Where it stops
+
+The fix ships in 1.10.1, so the copy of Install.ps1 inside the v1.10.0 tag
+still cannot fetch tags. Installing v1.10.0 by tag works only with an
+installer from 1.10.1 or later.
 '
 
         }
