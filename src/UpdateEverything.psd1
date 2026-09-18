@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'UpdateEverything.psm1'
-    ModuleVersion     = '1.10.1'
+    ModuleVersion     = '1.10.2'
     GUID              = 'e4e1f3eb-5967-4311-94af-c650fe192e95'
     Author            = 'Brian Kronberg'
     Copyright         = '(c) 2026 Brian Kronberg. Released under the MIT License.'
@@ -35,52 +35,38 @@
             Tags         = @('Windows', 'Update', 'Maintenance', 'winget', 'WindowsUpdate', 'Chocolatey', 'Scoop', 'ScheduledTask', 'PSEdition_Desktop', 'PSEdition_Core')
             LicenseUri   = 'https://github.com/briankronberg/UpdateEverything/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/briankronberg/UpdateEverything'
-            ReleaseNotes = '# 1.10.1
+            ReleaseNotes = '# 1.10.2
 
-## Installing tagged releases
+## Naming locked files
 
-Install.ps1 built one download URL, archive/refs/heads/<ref>.zip, which
-serves branches. GitHub serves tags from archive/refs/tags/. Measured
-against the live repository, heads/main returned 200, heads/v1.10.0
-returned 404, and tags/v1.10.0 returned 200. The -Ref parameter promised a
-branch or tag since it was written, but only ever delivered a branch. Every
-tagged release was uninstallable.
+A step that fails because a file is locked now names the file and the
+processes holding it. On the development machine, every scheduled run
+reported that uv self update failed with exit code 2. The step log held the
+reason: the process cannot access the file because it is being used by
+another process. Six processes held it, all uvx or uv, all launched by the
+desktop application that runs MCP servers through uvx. Because uv replaces
+both executables together, anything started through uvx blocks the update
+for as long as it runs.
 
-It now tries the branch path first and the tag path second. Asking GitHub
-is better than guessing from the shape of the name, because a repository
-can legitimately have a branch named like a version. The summary now
-reports which kind was found, for example "main, branch" or "v1.10.0, tag".
+The message now reads: Could not replace C:\Users\you\.local\bin\uvx.exe:
+a process is using it. Likely holders: uvx.exe (pid 11708, parent
+claude.exe), uvx.exe (pid 43336, parent claude.exe). Close them and run the
+update again.
 
-## Dry run fixes
-
-Two further bugs were found while proving the first fix. Both involved
--WhatIf reaching work that is not what the caller is deciding about. The
-temporary download folder was created with New-Item, which honours -WhatIf.
-Under -WhatIf the folder never existed, the download failed on a missing
-path, and the fallback reported that as neither a branch nor a tag being
-found. The folder is scaffolding rather than the operation, so it is now
-created regardless.
-
-With that cleared, -WhatIf reached Import-Module and failed with "no valid
-module file was found" because nothing had been copied. Install.ps1 -WhatIf
-had therefore never finished without an error. It now reports where it
-would install and stops.
-
-## Failure message
-
-The failure message was also rewritten. It hard-coded the string "Failed to
-download as tag" instead of the real exception, and captured the branch
-error inside the inner catch, so it reported the tag failure under the
-branch label and invented the other half. It now carries both real errors,
-names both addresses tried, and mentions a private repository last rather
-than first, where it had been sending readers to check the two things that
-were not wrong.
+It remains an error. A lock is a real failure to update, not a benign cause
+to excuse. Naming the reason does not downgrade the result.
 
 ## Where it stops
 
-The fix ships in 1.10.1, so the copy of Install.ps1 inside the v1.10.0 tag
-still cannot fetch tags. Installing v1.10.0 by tag works only with an
-installer from 1.10.1 or later.
+It finds a process whose own image is the locked file, which is the usual
+case when replacing an executable. A process holding the file open some
+other way is not found, so the wording says likely and never claims to be
+the whole list. It matches the actual Windows sentence rather than guessing
+from an exit code, so a failure for any other reason is reported exactly as
+before. Looking for the holder never becomes the failure; if the process
+table cannot be read, the lock is still reported without names. Only the uv
+step uses it so far. Other steps still report a lock the way they always
+did.
 '
 
         }
